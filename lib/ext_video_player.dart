@@ -25,6 +25,15 @@ final VideoPlayerPlatform _videoPlayerPlatform = VideoPlayerPlatform.instance
   // performed.
   ..init();
 
+enum VideoYoutubeQuality {
+  hd1080, // 1080p
+  hd720, // 720p
+  large, // 480p
+  medium, // 360p
+  small, // 240p
+  tiny, // 144p
+}
+
 /// The duration, current position, buffering state, error state and settings
 /// of a [VideoPlayerController].
 class VideoPlayerValue {
@@ -262,30 +271,12 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
 
     VideoQuality quality = youtubeVideoQuality ?? VideoQuality.medium360;
 
-    String finalYoutubeUrl = dataSource;
-    if (_getIdFromUrl(dataSource) != null) {
-      try {
-        Map<String, String> videoUrls = Map();
-        String _videoId = _getIdFromUrl(dataSource);
-        String _fetchUrl = "";
+    String finalYoutubeUrl =
+        await _getYoutubeUrlOld(_matchVideoQualityToYoutubeQuality(quality));
 
-        var yt = YoutubeExplode();
-
-        var manifest = await yt.videos.streamsClient.getManifest(_videoId);
-
-        Uri videoUri;
-        manifest.muxed.forEach((m) {
-          if (quality == m.videoQuality) {
-            videoUri = m.url;
-          }
-        });
-
-        if (videoUri == null) {
-          finalYoutubeUrl = manifest.muxed.first.url.toString();
-        } else {
-          finalYoutubeUrl = videoUri.toString();
-        }
-      } catch (err) {}
+    if (finalYoutubeUrl == dataSource) {
+      print("ExtVideoPlayer: Could not get youtube url using first way");
+      finalYoutubeUrl = await _getYoutubeUrlNew(quality);
     }
 
     DataSource dataSourceDescription;
@@ -375,6 +366,110 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
         .videoEventsFor(_textureId)
         .listen(eventListener, onError: errorListener);
     return initializingCompleter.future;
+  }
+
+  VideoYoutubeQuality _matchVideoQualityToYoutubeQuality(VideoQuality quality) {
+    switch (quality) {
+      case VideoQuality.low144:
+        return VideoYoutubeQuality.tiny;
+      case VideoQuality.low240:
+        return VideoYoutubeQuality.small;
+      case VideoQuality.medium360:
+        return VideoYoutubeQuality.medium;
+      case VideoQuality.medium480:
+        return VideoYoutubeQuality.large;
+      case VideoQuality.high720:
+        return VideoYoutubeQuality.hd720;
+      case VideoQuality.high1080:
+        return VideoYoutubeQuality.hd1080;
+      case VideoQuality.high1440:
+        return VideoYoutubeQuality.hd1080;
+      case VideoQuality.high2160:
+        return VideoYoutubeQuality.hd1080;
+      case VideoQuality.high2880:
+        return VideoYoutubeQuality.hd1080;
+      case VideoQuality.high3072:
+        return VideoYoutubeQuality.hd1080;
+      case VideoQuality.high4320:
+        return VideoYoutubeQuality.hd1080;
+      default:
+        return VideoYoutubeQuality.medium;
+    }
+  }
+
+  Future<String> _getYoutubeUrlNew(VideoQuality quality) async {
+    String finalYoutubeUrl = dataSource;
+    String videoId = _getIdFromUrl(dataSource);
+    if (videoId != null) {
+      try {
+        var yt = YoutubeExplode();
+        var manifest = await yt.videos.streamsClient.getManifest(videoId);
+        Uri videoUri;
+        manifest.muxed.forEach((m) {
+          if (quality == m.videoQuality) {
+            videoUri = m.url;
+          }
+        });
+        if (videoUri == null) {
+          finalYoutubeUrl = manifest.muxed.first.url.toString();
+        } else {
+          finalYoutubeUrl = videoUri.toString();
+        }
+      } catch (e, stackTrace) {
+        //print(stackTrace);
+      }
+    }
+    return finalYoutubeUrl;
+  }
+
+  Future<String> _getYoutubeUrlOld(VideoYoutubeQuality quality) async {
+    String finalYoutubeUrl = dataSource;
+    String videoId = _getIdFromUrl(dataSource);
+    if (videoId != null) {
+      try {
+        Map<String, String> videoUrls = Map();
+        String _fetchUrl = "";
+        if (kIsWeb) {
+          _fetchUrl =
+              "https://youtubevideodownloadurls.netlify.app/.netlify/functions/server?vid=$videoId";
+        } else {
+          _fetchUrl =
+              "https://www.youtube.com/get_video_info?&video_id=$videoId";
+        }
+        var response = await http.get(_fetchUrl);
+
+        Uri uri = Uri.parse('http://google.com?' + response.body);
+        var jsonRes = jsonDecode(uri.queryParameters['player_response']);
+        var formats = jsonRes['streamingData']['formats'];
+        formats.forEach((format) {
+          if (videoUrls[format['quality']] == null) {
+            videoUrls[format['quality']] = format['url'];
+          }
+        });
+        String newUrl = videoUrls[quality.toString().split('.').last];
+
+        if (newUrl == null) {
+          for (int i = quality.index + 1;
+              i < VideoYoutubeQuality.values.length;
+              i++) {
+            newUrl = videoUrls[
+                VideoYoutubeQuality.values[i].toString().split('.').last];
+            if (newUrl != null) break;
+          }
+        }
+        if (newUrl == null) {
+          for (int i = quality.index - 1; i >= 0; i--) {
+            newUrl = videoUrls[
+                VideoYoutubeQuality.values[i].toString().split('.').last];
+            if (newUrl != null) break;
+          }
+        }
+        if (newUrl != null) finalYoutubeUrl = newUrl;
+      } catch (e, stackTrace) {
+        //print(stackTrace);
+      }
+    }
+    return finalYoutubeUrl;
   }
 
   /// To Get VideoId from Url
