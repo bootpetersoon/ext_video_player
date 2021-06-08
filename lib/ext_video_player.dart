@@ -6,23 +6,24 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:meta/meta.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
+import 'src/closed_caption_file.dart';
+
 export 'package:video_player_platform_interface/video_player_platform_interface.dart'
     show DurationRange, DataSourceType, VideoFormat, VideoPlayerOptions;
 
-import 'src/closed_caption_file.dart';
 export 'src/closed_caption_file.dart';
 
 final VideoPlayerPlatform _videoPlayerPlatform = VideoPlayerPlatform.instance
-  // This will clear all open videos on the platform when a full restart is
-  // performed.
+// This will clear all open videos on the platform when a full restart is
+// performed.
   ..init();
 
 enum VideoYoutubeQuality {
@@ -436,7 +437,7 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
           _fetchUrl =
               "https://www.youtube.com/get_video_info?&video_id=$videoId";
         }
-        var response = await http.get(_fetchUrl);
+        var response = await http.get(Uri.parse(_fetchUrl));
 
         Uri uri = Uri.parse('http://google.com?' + response.body);
         var jsonRes = jsonDecode(uri.queryParameters['player_response']);
